@@ -28,7 +28,6 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::marker::PhantomData;
 use std::ops::Neg;
-use std::rc::Rc;
 
 pub type SourceIndex = usize;
 
@@ -488,25 +487,20 @@ where
     I: InputType + Neg<Output = I>,
     F: OutputType + Neg<Output = F>,
 {
-    pub fn new_3(
-        id: VertexIndex,
-        x: F,
-        y: F,
-        is_site_vertex: bool,
-    ) -> Rc<cell::Cell<Vertex<I, F>>> {
+    pub fn new_3(id: VertexIndex, x: F, y: F, is_site_vertex: bool) -> cell::Cell<Vertex<I, F>> {
         let color = if is_site_vertex {
             ColorBits::SITE_VERTEX__BIT.0
         } else {
             ColorBits::ZERO.0
         };
-        Rc::new(cell::Cell::new(Self {
+        cell::Cell::new(Self {
             id_: id,
             x_: x,
             y_: y,
             incident_edge_: None,
             color_: color,
             pdi_: PhantomData,
-        }))
+        })
     }
 
     fn vertex_equality_predicate_eq(&self, other: &Self) -> bool {
@@ -649,7 +643,7 @@ where
         if is_primary {
             rv.color_ |= Self::BIT_IS_PRIMARY;
         }
-        Rc::from(cell::Cell::from(rv))
+        cell::Cell::from(rv)
     }
 
     /// Returns the edge index
@@ -766,9 +760,9 @@ where
     }
 }
 
-pub type CellType<I, F> = Rc<cell::Cell<Cell<I, F>>>;
-pub type EdgeType<I, F> = Rc<cell::Cell<Edge<I, F>>>;
-pub type VertexType<I, F> = Rc<cell::Cell<Vertex<I, F>>>;
+pub type CellType<I, F> = cell::Cell<Cell<I, F>>;
+pub type EdgeType<I, F> = cell::Cell<Edge<I, F>>;
+pub type VertexType<I, F> = cell::Cell<Vertex<I, F>>;
 
 /// Voronoi output data structure.
 /// CCW ordering is used on the faces perimeter and around the vertices.
@@ -835,23 +829,27 @@ where
 
     #[inline(always)]
     /// Returns a Rc<cell::Cell<>> belonging to the cell_id
-    pub fn get_cell(&self, cell_id: CellIndex) -> Result<Rc<cell::Cell<Cell<I, F>>>, BvError> {
-        Ok(Rc::clone(self.cells_.get(cell_id.0).ok_or_else(|| {
-            BvError::IdError(format!("The cell with id:{} does not exist", cell_id.0))
-        })?))
+    pub fn get_cell(&self, cell_id: CellIndex) -> Result<cell::Cell<Cell<I, F>>, BvError> {
+        Ok(self
+            .cells()
+            .get(cell_id.0)
+            .ok_or_else(|| {
+                BvError::IdError(format!("The cell with id:{} does not exist", cell_id.0))
+            })?
+            .clone())
     }
 
     #[inline(always)]
     /// Returns the edge associated with the edge id
     pub(crate) fn get_edge_(&self, edge_id: Option<EdgeIndex>) -> Option<EdgeType<I, F>> {
         let edge_id = edge_id?;
-        self.edges_.get(edge_id.0).map(|x| Rc::clone(x))
+        self.edges().get(edge_id.0).cloned()
     }
 
     /// Returns the edge associated with the edge id
     pub fn get_edge(&self, edge_id: EdgeIndex) -> Result<EdgeType<I, F>, BvError> {
         if let Some(edge) = self.edges_.get(edge_id.0) {
-            Ok(Rc::clone(edge))
+            Ok(edge.clone())
         } else {
             Err(BvError::IdError(format!(
                 "The edge with id:{} does not exist",
@@ -959,17 +957,17 @@ where
         // fill cell with temporary blocks- they will be over-written later
         // Todo: fix this dirty hack with Option<>
         while self.cells_.len() < cell_id.0 {
-            self.cells_.push(Rc::new(cell::Cell::new(Cell::<I, F>::new(
+            self.cells_.push(cell::Cell::new(Cell::<I, F>::new(
                 CellIndex(usize::MAX),
                 usize::MAX,
                 ColorBits::TEMPORARY_CELL.0,
-            ))));
+            )));
         }
-        self.cells_.push(Rc::new(cell::Cell::new(Cell::<I, F>::new(
+        self.cells_.push(cell::Cell::new(Cell::<I, F>::new(
             cell_id,
             initial_index,
             sc.0,
-        ))));
+        )));
         #[cfg(feature = "console_debug")]
         assert_eq!(self.cells_[cell_id.0].get().id().0, cell_id.0);
 
